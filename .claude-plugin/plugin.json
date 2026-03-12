@@ -1,0 +1,12 @@
+{
+  "name": "echosy",
+  "description": "Read, search, and summarize Echosy meeting transcripts (.echo files) directly from Claude Code",
+  "version": "1.0.0",
+  "author": {
+    "name": "Pong Wong",
+    "url": "https://github.com/woponi"
+  },
+  "repository": "https://github.com/woponi/echosy-releases",
+  "license": "MIT",
+  "keywords": ["echosy", "transcription", "meeting", "voice", "audio", "transcript"]
+}
