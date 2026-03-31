@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "echosy",
-      "source": ".",
+      "source": "./",
       "description": "Interact with the Echosy transcription app via its local API or read .echo transcript files offline"
     }
   ]
