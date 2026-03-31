@@ -1,0 +1,14 @@
+{
+  "name": "echosy",
+  "owner": {
+    "name": "Pong Wong",
+    "url": "https://github.com/woponi"
+  },
+  "plugins": [
+    {
+      "name": "echosy",
+      "source": ".",
+      "description": "Interact with the Echosy transcription app via its local API or read .echo transcript files offline"
+    }
+  ]
+}

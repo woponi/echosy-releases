@@ -1,6 +1,6 @@
 # Echosy Plugin for Claude Code
 
-Read, search, and summarize [Echosy](https://echosy.app) meeting transcripts (`.echo` files) directly from Claude Code.
+Interact with the [Echosy](https://echosy.app) transcription app — read transcripts, control recordings, search meeting notes, and use AI features via the local API.
 
 ## What is Echosy?
 
@@ -12,18 +12,36 @@ Echosy is a macOS app that captures system + microphone audio, transcribes it us
 /plugin install echosy
 ```
 
-## Usage
+Or add the marketplace first:
 
 ```bash
-# List all transcripts in the project
+/plugin marketplace add woponi/echosy-releases
+/plugin install echosy@woponi/echosy-releases
+```
+
+## Usage
+
+### Live API (when Echosy app is running)
+
+```bash
+# Get the latest transcript
+/echosy latest
+
+# List all recordings
 /echosy list
 
-# Read a transcript by keyword
+# Read a specific transcript
 /echosy transcript "standup"
 
 # Search across all transcripts
 /echosy search "budget"
+```
 
+The plugin auto-detects if Echosy is running on `localhost:8765` and uses the live API for richer data including recording control, AI summaries, and real-time status.
+
+### Offline (read .echo files directly)
+
+```bash
 # Get transcript with metadata header (for summarization)
 /echosy summary "Q1 review"
 
@@ -33,6 +51,16 @@ Echosy is a macOS app that captures system + microphone audio, transcribes it us
 # Get raw JSON segments with timestamps
 /echosy json "interview"
 ```
+
+## Live API Capabilities
+
+When Echosy is running, the plugin can:
+
+- **List & read** recordings, transcripts, and summaries
+- **Control recording** — start, stop, toggle mic
+- **AI features** — generate summaries, chat about transcripts, translate/punctuate
+- **File transcription** — transcribe audio/video files or URLs
+- **Re-transcribe** — re-run segmentation with different VAD settings
 
 ## .echo File Format
 
@@ -44,13 +72,6 @@ Echosy is a macOS app that captures system + microphone audio, transcribes it us
 | `transcript.md` | Human-readable markdown transcript with timestamps |
 | `transcript.json` | Machine-readable segments with precise start/end times |
 | `audio.flac` | Audio recording (not read by this plugin) |
-
-## File Resolution
-
-The file argument supports flexible matching:
-- **Full path**: `transcript/Meeting_2026-03-10.echo`
-- **Filename**: `Meeting_2026-03-10.echo`
-- **Keyword**: `Meeting` — matches against filenames in the transcript directory
 
 ## Configuration
 

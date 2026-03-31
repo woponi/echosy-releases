@@ -1,7 +1,7 @@
 {
   "name": "echosy",
-  "description": "Read, search, and summarize Echosy meeting transcripts (.echo files) directly from Claude Code",
-  "version": "1.0.0",
+  "description": "Interact with the Echosy transcription app via its local API or read .echo transcript files offline",
+  "version": "1.1.0",
   "author": {
     "name": "Pong Wong",
     "url": "https://github.com/woponi"

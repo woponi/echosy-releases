@@ -1,52 +1,144 @@
 ---
 name: echosy
-description: Read Echosy meeting transcript files (.echo format). Use when the user wants to read, search, summarize, or list meeting transcripts.
-argument-hint: "[list | transcript <file> | search <keyword> | summary <file>]"
-allowed-tools: Bash
+description: Interact with the Echosy transcription app via its local API or read .echo transcript files offline.
+argument-hint: "[list | latest | transcript <name> | search <keyword> | summary <name>]"
+allowed-tools: Bash, WebFetch
 ---
 
-Read and search Echosy .echo meeting transcript files. These are ZIP archives containing audio + transcript data.
+# Echosy Skill
 
-## Commands
+Interact with the [Echosy](https://echosy.app) transcription app — read transcripts, control recordings, and search meeting notes.
+
+## Quick Start
+
+Echosy runs a local API on `http://127.0.0.1:8765` when the app is open.
 
 ```bash
-# List all available transcripts
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py list
+# Check if Echosy is running
+curl -sf http://127.0.0.1:8765/api/status
 
-# Show file metadata (date, duration, segments)
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py info '<file_or_keyword>'
+# List all recordings
+curl -s http://127.0.0.1:8765/api/recordings
 
-# Read the markdown transcript
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py transcript '<file_or_keyword>'
-
-# Read transcript with metadata header (good for summarization)
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py summary '<file_or_keyword>'
-
-# Get raw JSON segments (with precise timestamps)
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py json '<file_or_keyword>'
-
-# Search keyword across all transcripts
-python3 ${CLAUDE_SKILL_DIR}/scripts/echosy.py search '<keyword>'
+# Get the latest transcript
+LATEST=$(curl -s http://127.0.0.1:8765/api/recordings | python3 -c "
+import sys,json
+recs=json.load(sys.stdin)
+recs.sort(key=lambda r:r.get('modified',0), reverse=True)
+print(recs[0]['name'] if recs else '')
+" 2>/dev/null)
+curl -s "http://127.0.0.1:8765/api/recordings/${LATEST}/transcript"
 ```
 
-## File Resolution
+---
 
-The `<file_or_keyword>` argument supports:
-- Full path: `transcript/Meeting_2026-03-10_11-42-52.echo`
-- Filename: `Meeting_2026-03-10_11-42-52.echo`
-- Keyword match: `Meeting` (matches against filenames in transcript/ dir)
+## API Reference
 
-## Default Transcript Directory
+All endpoints are on `http://127.0.0.1:8765` (localhost only).
 
-Transcripts are stored in `transcript/` under the project root. Override with `ECHOSY_TRANSCRIPT_DIR` environment variable.
+### Status
 
-## Typical Workflows
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/status` | App status — recording state, model loaded, chunk progress |
 
-1. **List transcripts** → pick one → **read transcript** → **summarize key points**
-2. **Search keyword** across all meetings to find relevant discussions
-3. **Read summary** format and ask Claude to extract action items, decisions, or key topics
+### Recordings & Transcripts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/recordings` | List all recordings |
+| GET | `/api/recordings/{name}/transcript` | Get transcript (markdown + JSON segments) |
+| GET | `/api/recordings/{name}/summary` | Get summary markdown |
+| PUT | `/api/recordings/{name}/transcript` | Save/update transcript |
+| POST | `/api/recordings/{name}/rename` | Rename recording — body: `{"new_name": "..."}` |
+| PUT | `/api/recordings/{name}/subject` | Update subject — body: `{"subject": "..."}` |
+| DELETE | `/api/recordings/{name}` | Delete recording |
+| POST | `/api/export` | Export transcript — body: `{"name": "...", "format": "md\|txt\|srt\|vtt"}` |
+
+**List response:**
+```json
+[{"name": "recording_2026-03-29_14-30-00", "has_transcript": true, "has_summary": false, "duration": 1234.5, "modified": 1711700000, "segment_count": 42}]
+```
+
+**Transcript response:**
+```json
+{
+  "content": "**[00:00:01 → 00:00:05]** Hello...",
+  "decorated_content": "...",
+  "segments": [{"id": 1, "text": "Hello", "startTime": 1, "endTime": 5, "source": "recording"}]
+}
+```
+
+### Recording Control
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/recording/start` | Start — body: `{"capture_mic": true, "save_wav": true}` |
+| POST | `/api/recording/stop` | Stop recording |
+| POST | `/api/recording/toggle` | Toggle recording on/off |
+| POST | `/api/recording/mic` | Toggle mic — body: `{"capture_mic": true}` |
+| POST | `/api/recording/retranscribe` | Re-run transcription — body: `{"name": "..."}` |
+| POST | `/api/recording/retranscribe/cancel` | Cancel retranscribe |
+
+### AI Features
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/summary/generate` | Generate summary — body: `{"text": "...", "filename": "..."}` |
+| POST | `/api/summary/stop` | Stop summary generation |
+| POST | `/api/chat/send` | Chat about transcript — body: `{"message": "...", "context": "...", "session": "transcript"}` |
+| POST | `/api/decorate` | Translate/punctuate — body: `{"segments": [...], "mode": "translate", "target_language": "English"}` |
+| POST | `/api/decorate/stop` | Stop decoration |
+
+### File/URL Transcription
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/files/transcribe` | Transcribe file — body: `{"path": "/path/to/file.mp4"}` |
+| POST | `/api/files/transcribe-url` | Transcribe URL — body: `{"url": "https://..."}` |
+| POST | `/api/files/stop` | Stop file transcription |
+
+### ASR Models
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/asr/languages` | List supported languages |
+| GET | `/api/asr/models` | List available/downloaded models |
+| POST | `/api/asr/download` | Download model — body: `{"model_id": "..."}` |
+| POST | `/api/asr/delete` | Delete model — body: `{"model_id": "..."}` |
+
+### Dictation
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/dictation/toggle` | Toggle dictation |
+| POST | `/api/dictation/toggle-edit` | Toggle edit mode |
+| GET | `/api/dictation/status` | Dictation status |
+| GET | `/api/dictation/languages` | Available languages |
+| GET | `/api/dictation/check-mic` | Check mic availability |
+| GET | `/api/dictation/mic-devices` | List mic devices |
+
+---
+
+## Offline Usage
+
+When Echosy is not running, you can read `.echo` files directly. They are ZIP archives containing `manifest.json`, `transcript.md`, `transcript.json`, and `audio.flac`.
+
+```python
+import zipfile, json
+
+with zipfile.ZipFile("recording.echo", "r") as zf:
+    manifest = json.loads(zf.read("manifest.json"))
+    transcript = zf.read("transcript.md").decode("utf-8")
+    segments = json.loads(zf.read("transcript.json"))
+    print(f"Duration: {manifest.get('duration_seconds', 0):.0f}s")
+    print(f"Segments: {len(segments)}")
+    print(transcript)
+```
 
 ## Notes
-- .echo files are ZIP archives containing: manifest.json, transcript.md, transcript.json, audio.flac
-- Audio files are NOT read (too large) — only text content is extracted
-- Transcripts may be in Chinese/English mixed content
+
+- API runs on **localhost only** — not exposed to the network
+- Recording names may contain spaces — URL-encode them in URLs
+- Transcripts may contain multilingual content (Chinese/English/Japanese/Korean)
+- Some features have usage limits on the free tier (enforced server-side)
