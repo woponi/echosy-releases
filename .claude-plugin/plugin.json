@@ -1,12 +1,19 @@
 {
   "name": "echosy",
   "description": "Interact with the Echosy transcription app via its local API or read .echo transcript files offline",
-  "version": "1.1.0",
+  "version": "2.1.0",
   "author": {
     "name": "Pong Wong",
     "url": "https://github.com/woponi"
   },
   "repository": "https://github.com/woponi/echosy-releases",
   "license": "MIT",
-  "keywords": ["echosy", "transcription", "meeting", "voice", "audio", "transcript"]
+  "keywords": [
+    "echosy",
+    "transcription",
+    "meeting",
+    "voice",
+    "audio",
+    "transcript"
+  ]
 }

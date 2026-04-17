@@ -1,7 +1,7 @@
 ---
 name: echosy
-description: Interact with the Echosy transcription app via its local API or read .echo transcript files offline.
-argument-hint: "[list | latest | transcript <name> | search <keyword> | summary <name>]"
+description: Interact with the Echosy transcription app via its local API or read .echo transcript files offline. Also exposes Echosy's on-device LLM (Gemma 4 / Qwen 3.5) for ad-hoc prompt interactions.
+argument-hint: "[list | latest | transcript <name> | search <keyword> | summary <name> | ask <prompt>]"
 allowed-tools: Bash, WebFetch
 ---
 
@@ -86,9 +86,93 @@ All endpoints are on `http://127.0.0.1:8765` (localhost only).
 |--------|----------|-------------|
 | POST | `/api/summary/generate` | Generate summary — body: `{"text": "...", "filename": "..."}` |
 | POST | `/api/summary/stop` | Stop summary generation |
-| POST | `/api/chat/send` | Chat about transcript — body: `{"message": "...", "context": "...", "session": "transcript"}` |
+| POST | `/api/chat/send` | Chat about transcript (streams over WebSocket) — body: `{"messages": [...], "context": "...", "session": "transcript"}` |
 | POST | `/api/decorate` | Translate/punctuate — body: `{"segments": [...], "mode": "translate", "target_language": "English"}` |
 | POST | `/api/decorate/stop` | Stop decoration |
+
+### Local LLM (Echosy Internal) — on-device Gemma 4 / Qwen 3.5
+
+The on-device LLM runs in its own sidecar process and can be driven directly
+for arbitrary prompt interactions — summaries, rewrites, translations,
+extraction, brainstorming, etc. Synchronous (no WebSocket needed).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/local-llm/models` | List available + downloaded local models |
+| POST | `/api/local-llm/test` | Quick round-trip sanity check (returns "OK") |
+| POST | `/api/local-llm/generate` | **Run a prompt through the local LLM** |
+
+**Generate endpoint body** — supply either a simple `prompt` (with optional `system`) or a full `messages` list, plus optional sampling params:
+
+```json
+{
+  "prompt": "Summarise this meeting in three bullet points: ...",
+  "system": "You are a concise note-taker.",
+  "max_tokens": 512,
+  "temperature": 0.4
+}
+```
+
+Or with an explicit conversation:
+
+```json
+{
+  "messages": [
+    {"role": "system", "content": "Reply in Traditional Chinese."},
+    {"role": "user", "content": "What is mlx-lm?"}
+  ],
+  "max_tokens": 300,
+  "temperature": 0.6
+}
+```
+
+**Response:**
+```json
+{"ok": true, "model_id": "gemma-4-e4b", "response": "..."}
+```
+
+Notes:
+- Requires a local model to be selected in Echosy settings (`llm_local_model`).
+- The model is loaded on first call and stays resident until idle-unload fires (default 10 min) or RAM pressure.
+- Call is blocking — expect a few seconds for short replies, longer for bigger contexts.
+- `max_tokens` is clamped to `[1, 8192]`; `temperature` to `[0.0, 2.0]`.
+- 400 if no model selected, 503 if the local LLM engine is unavailable, 500 on generation error.
+
+**Quick examples:**
+
+```bash
+# Simple one-shot prompt
+curl -s http://127.0.0.1:8765/api/local-llm/generate \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Give me three startup name ideas for a meeting transcription app."}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['response'])"
+
+# Summarise the latest Echosy transcript with the local model
+LATEST=$(curl -s http://127.0.0.1:8765/api/recordings \
+  | python3 -c "import sys,json; r=json.load(sys.stdin); r.sort(key=lambda x:x.get('modified_at',0),reverse=True); print(r[0]['name'])")
+TRANSCRIPT=$(curl -s "http://127.0.0.1:8765/api/recordings/${LATEST}/transcript" \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('content',''))")
+python3 -c "
+import json,sys,urllib.request
+body=json.dumps({'system':'You are a concise meeting summariser. Output markdown bullets.',
+                 'prompt':sys.argv[1],'max_tokens':600,'temperature':0.3}).encode()
+req=urllib.request.Request('http://127.0.0.1:8765/api/local-llm/generate',
+                           data=body, headers={'Content-Type':'application/json'})
+print(json.loads(urllib.request.urlopen(req).read())['response'])
+" "$TRANSCRIPT"
+
+# Multi-turn conversation
+curl -s http://127.0.0.1:8765/api/local-llm/generate \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[
+        {"role":"system","content":"You are a helpful assistant."},
+        {"role":"user","content":"Translate to Japanese: The meeting starts at 10am."}
+      ]}'
+```
+
+**When to use which LLM endpoint:**
+- `/api/local-llm/generate` — ad-hoc prompts, rewrites, translation, extraction. Synchronous, no session/context persistence. Use this whenever you just need the model to answer something.
+- `/api/chat/send` — only when you want the response streamed over WebSocket with session tracking (e.g. when driving the Ask AI panel from code). For plain prompting, prefer the generate endpoint.
 
 ### File/URL Transcription
 
